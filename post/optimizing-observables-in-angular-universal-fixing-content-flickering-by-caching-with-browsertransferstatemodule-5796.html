@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>Optimizing Observables in Angular Universal (+flickering fix) by Caching with BrowserTransferStateModule | Aziz Writes</title>
+<meta name="generator" content="Jekyll v4.0.1" />
+<meta property="og:title" content="Optimizing Observables in Angular Universal (+flickering fix) by Caching with BrowserTransferStateModule" />
+<meta name="author" content="Aziz Yokubjonov" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Disclaimer If you are simply using HttpClient to fetch your data, then you’re all set since the solution for duplicate requests and flashing content is simpler and the official tutorial covers it decently well. Hopefully, that does it for you but you are welcome to keep reading if you’re interested in handling other scenarios!" />
+<meta property="og:description" content="Disclaimer If you are simply using HttpClient to fetch your data, then you’re all set since the solution for duplicate requests and flashing content is simpler and the official tutorial covers it decently well. Hopefully, that does it for you but you are welcome to keep reading if you’re interested in handling other scenarios!" />
+<meta property="og:site_name" content="Aziz Writes" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2020-04-30T00:00:00-04:00" />
+<script type="application/ld+json">
+{"author":{"@type":"Person","name":"Aziz Yokubjonov"},"headline":"Optimizing Observables in Angular Universal (+flickering fix) by Caching with BrowserTransferStateModule","dateModified":"2020-04-30T00:00:00-04:00","description":"Disclaimer If you are simply using HttpClient to fetch your data, then you’re all set since the solution for duplicate requests and flashing content is simpler and the official tutorial covers it decently well. Hopefully, that does it for you but you are welcome to keep reading if you’re interested in handling other scenarios!","datePublished":"2020-04-30T00:00:00-04:00","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"/post/optimizing-observables-in-angular-universal-fixing-content-flickering-by-caching-with-browsertransferstatemodule-5796"},"url":"/post/optimizing-observables-in-angular-universal-fixing-content-flickering-by-caching-with-browsertransferstatemodule-5796","@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="/assets/main.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Libre+Baskerville:400,400i,700">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+
+  <!-- RSS -->
+  <link type="application/atom+xml" rel="alternate" href="/feed.xml" title="Aziz Writes" />
+
+  <!-- Google Analytics-->
+  
+</head>
+
+
+  <body>
+
+    <nav class="nav">
+  <div class="nav-container">
+    <a href="/">
+      <h2 class="nav-title">Aziz Writes</h2> stuff here
+    </a>
+    <ul>
+      <li><a href="/about">About</a></li>
+      <li><a href="/contact">Contact</a></li>
+      <li><a href="/feed.xml">Feed</a></li>
+    </ul>
+  </div>
+</nav>
+
+
+    <main>
+      <div class="post">
+  <div class="post-info">
+    
+      <time datetime="2020-04-30 00:00:00 -0400">April 30, 2020</time>
+    
+  </div>
+
+  <h1 class="post-title">Optimizing Observables in Angular Universal (+flickering fix) by Caching with BrowserTransferStateModule</h1>
+  <div class="post-line"></div>
+
+  <h4 id="disclaimer">Disclaimer</h4>
+<p>If you are simply using <code class="highlighter-rouge">HttpClient</code> to fetch your data, then you’re all set since the solution for duplicate requests and flashing content is simpler and <a href="https://github.com/angular/universal/blob/master/docs/transfer-http.md">the official tutorial</a> covers it decently well. Hopefully, that does it for you but you are welcome to keep reading if you’re interested in handling other scenarios!</p>
+
+<h2 id="why">Why</h2>
+<p>Let’s say we have a cooking blog built on Angular Universal where we share our favorite recipes. The blog has a database and we have a service <code class="highlighter-rouge">BlogService</code> to fetch our content. The code of our post-displaying component looks something like this:</p>
+<div class="language-typescript highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">import</span> <span class="p">{</span> <span class="nx">Component</span><span class="p">,</span> <span class="nx">OnInit</span> <span class="p">}</span> <span class="k">from</span> <span class="dl">'</span><span class="s1">@angular/core</span><span class="dl">'</span><span class="p">;</span>
+<span class="k">import</span> <span class="p">{</span> <span class="nx">BlogService</span><span class="p">,</span> <span class="nx">Post</span> <span class="p">}</span> <span class="k">from</span> <span class="dl">'</span><span class="s1">./blog-service.service</span><span class="dl">'</span><span class="p">;</span>
+<span class="k">import</span> <span class="p">{</span> <span class="nx">Observable</span> <span class="p">}</span> <span class="k">from</span> <span class="dl">'</span><span class="s1">rxjs</span><span class="dl">'</span><span class="p">;</span>
+<span class="p">@</span><span class="nd">Component</span><span class="p">({</span>
+  <span class="na">selector</span><span class="p">:</span> <span class="dl">'</span><span class="s1">app-root</span><span class="dl">'</span><span class="p">,</span>
+  <span class="na">templateUrl</span><span class="p">:</span> <span class="dl">'</span><span class="s1">./app.component.html</span><span class="dl">'</span><span class="p">,</span>
+  <span class="na">styleUrls</span><span class="p">:</span> <span class="p">[</span><span class="dl">'</span><span class="s1">./app.component.css</span><span class="dl">'</span><span class="p">]</span>
+<span class="p">})</span>
+<span class="k">export</span> <span class="kd">class</span> <span class="nx">AppComponent</span> <span class="kr">implements</span> <span class="nx">OnInit</span> <span class="p">{</span>
+  <span class="nl">blogPost</span><span class="p">:</span> <span class="nx">Observable</span><span class="o">&lt;</span><span class="nx">Post</span><span class="o">&gt;</span><span class="p">;</span>
+
+  <span class="kd">constructor</span><span class="p">(</span><span class="kr">private</span> <span class="nx">blogService</span><span class="p">:</span> <span class="nx">BlogService</span><span class="p">)</span> <span class="p">{</span>
+  <span class="p">}</span>
+  <span class="nx">ngOnInit</span><span class="p">()</span> <span class="p">{</span>
+    <span class="kd">const</span> <span class="nx">URL_SLUG</span> <span class="o">=</span> <span class="dl">'</span><span class="s1">pasta-cook</span><span class="dl">'</span><span class="p">;</span>
+    <span class="k">this</span><span class="p">.</span><span class="nx">blogPost</span> <span class="o">=</span> <span class="k">this</span><span class="p">.</span><span class="nx">blogService</span><span class="p">.</span><span class="nx">getPost</span><span class="p">(</span><span class="nx">URL_SLUG</span><span class="p">);</span>
+  <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+<p>Pretty simple and totally fine if we have a SPA. But we have an app with SSR and this will pose a few issues.<br />
+When we run the app (with SSR enabled), we’ll see the following:</p>
+<div style="text-align: center">
+  <video autoplay="" loop="" width="500">
+      <source src="https://firebasestorage.googleapis.com/v0/b/my-blog-5360d.appspot.com/o/uploads%2Fproblem-demomp4-9383?alt=media&amp;token=ff39f854-2f9c-4a6d-9f76-bc2e788527af" type="video/mp4" />
+      Sorry, your browser doesn't support embedded videos.
+  </video>
+</div>
+
+<p>Weird, isn’t it? We had our content there, but then it disappeared just to appear again later, resulting in a flash on the screen.</p>
+
+<p>Let’s look at what’s happening there. If we open the Network tab in Chrome Devtools and inspect the initial page request, we can see that page markup comes hydrated with all the content, which is exactly what we want from SSR.</p>
+
+<p><img src="https://firebasestorage.googleapis.com/v0/b/my-blog-5360d.appspot.com/o/uploads%2Fhydratedhtmlpng-9178?alt=media&amp;token=addf1c51-eebe-450f-a4db-c28b607da1ca" alt="hydrated HTML" /></p>
+
+<p><strong>Note:</strong> In <code class="highlighter-rouge">BlogService</code> I’m imitating an API and every time there should be a request to the API, I’m logging “Request is made”. With a real service, you’d instead look at requests being sent in the Network tab of DevTools.</p>
+
+<p>As we should expect, when we load the page, the server-side makes an API call:</p>
+
+<p><img src="https://firebasestorage.googleapis.com/v0/b/my-blog-5360d.appspot.com/o/uploads%2Fnode-logging-requestpng-9675?alt=media&amp;token=8e740c35-9827-4747-81a5-2f9bd3e85cb4" alt="node logging request" /></p>
+
+<p>But in Chrome’s DevTools we see that so does the browser:</p>
+
+<p><img src="https://firebasestorage.googleapis.com/v0/b/my-blog-5360d.appspot.com/o/uploads%2Fbrowser-logging-requestpng-9674?alt=media&amp;token=d8174e3e-27c7-4f02-8bbb-cac20fa220fd" alt="client side logging request" /></p>
+
+<p>This means that we are making the same request twice and thus putting an additional strain on our data servers by repeatedly fetching the same content.</p>
+
+<p>To summarize, here are the steps that the code performs as we open our page in the browser:</p>
+<ol>
+  <li>Server fetches the post</li>
+  <li>Server renders the post</li>
+  <li>Browser fetches the same post</li>
+  <li>Browser re-renders the post</li>
+</ol>
+
+<p>The last two steps are unnecessary and they cause the weird screen flashing and duplicate API requests. This happens naturally because with Angular’s Server-Side Rendering, the code in your components always runs both on the server and in the browser unless specified otherwise.</p>
+
+<h2 id="solution">Solution</h2>
+
+<p>To fix our problem, we will have to implement server-client caching. Angular’s <code class="highlighter-rouge">BrowserTransferStateModule</code> is exactly what we need to do so.<br />
+In the end, we aim to have the following lifecycle:</p>
+<ol>
+  <li>Server fetches the post</li>
+  <li>Server saves the post to cache</li>
+  <li>Server renders the post into HTML</li>
+  <li>Browser fetches the post <strong>from cache</strong></li>
+</ol>
+
+<h3 id="0-setting-up">0. Setting up</h3>
+<p>First, we have to import <code class="highlighter-rouge">BrowserTransferStateModule</code> into <code class="highlighter-rouge">app.module.ts</code>:</p>
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">import</span> <span class="p">{</span> <span class="nx">BrowserModule</span><span class="p">,</span> <span class="nx">BrowserTransferStateModule</span> <span class="p">}</span> <span class="k">from</span> <span class="dl">'</span><span class="s1">@angular/platform-browser</span><span class="dl">'</span><span class="p">;</span>
+
+<span class="nl">imports</span><span class="p">:</span> <span class="p">[</span>
+  <span class="nx">BrowserModule</span><span class="p">.</span><span class="nx">withServerTransition</span><span class="p">({</span> <span class="na">appId</span><span class="p">:</span> <span class="dl">'</span><span class="s1">serverApp</span><span class="dl">'</span> <span class="p">}),</span>
+  <span class="nx">BrowserTransferStateModule</span><span class="p">,</span>
+  <span class="p">...</span>
+<span class="p">]</span>
+</code></pre></div></div>
+<p>In <code class="highlighter-rouge">app.server.module.ts</code> we have to import <code class="highlighter-rouge">ServerTransferStateModule</code>:</p>
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">import</span> <span class="p">{</span> <span class="nx">ServerModule</span><span class="p">,</span> <span class="nx">ServerTransferStateModule</span> <span class="p">}</span> <span class="k">from</span> <span class="dl">'</span><span class="s1">@angular/platform-server</span><span class="dl">'</span><span class="p">;</span>
+
+<span class="nl">imports</span><span class="p">:</span> <span class="p">[</span>
+    <span class="nx">AppModule</span><span class="p">,</span>
+    <span class="nx">ServerModule</span><span class="p">,</span>
+    <span class="nx">ServerTransferStateModule</span>
+<span class="p">],</span>
+</code></pre></div></div>
+
+<p>In our working component we need to import <code class="highlighter-rouge">TransferState</code> and <code class="highlighter-rouge">makeStateKey</code>:</p>
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">import</span> <span class="p">{</span> <span class="nx">TransferState</span><span class="p">,</span> <span class="nx">makeStateKey</span> <span class="p">}</span> <span class="k">from</span> <span class="dl">'</span><span class="s1">@angular/platform-browser</span><span class="dl">'</span><span class="p">;</span>
+
+<span class="p">@</span><span class="nd">Component</span><span class="p">({</span>
+  <span class="p">...</span>
+<span class="p">})</span>
+<span class="k">export</span> <span class="kd">class</span> <span class="nx">AppComponent</span> <span class="kr">implements</span> <span class="nx">OnInit</span> <span class="p">{</span>
+    <span class="kd">constructor</span><span class="p">(</span><span class="kr">private</span> <span class="nx">blogService</span><span class="p">:</span> <span class="nx">BlogService</span><span class="p">,</span> 
+                  <span class="kr">private</span> <span class="nx">state</span><span class="p">:</span> <span class="nx">TransferState</span><span class="p">)</span> <span class="p">{</span>
+    <span class="p">...</span>
+</code></pre></div></div>
+<h3 id="1-saving-post-to-cache-on-the-server-side">1. Saving post to cache on the server-side</h3>
+<p>To implement caching, we will use the <code class="highlighter-rouge">TransferState</code> service imported earlier. It provides us with a writeable Map (object) with string keys and values of any type. This object gets transferred from server to client.<br />
+To create these state keys, Angular provides <code class="highlighter-rouge">makeStateKey</code>. Your state keys should carry enough information to later identify the exact service call that we made on the server side. In our case it will be as follows:</p>
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">URL_SLUG</span> <span class="o">=</span> <span class="dl">'</span><span class="s1">pasta-cook</span><span class="dl">'</span><span class="p">;</span>
+<span class="kd">const</span> <span class="nx">dataKey</span> <span class="o">=</span> <span class="nx">makeStateKey</span><span class="p">(</span><span class="s2">`posts/</span><span class="p">${</span><span class="nx">URL_SLUG</span><span class="p">}</span><span class="s2">`</span><span class="p">);</span>
+</code></pre></div></div>
+<p>Now, let’s save our <code class="highlighter-rouge">blogService.getPost(URL_SLUG)</code> Observable into a variable, so we can transform its values later:</p>
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">$dataSource</span> <span class="o">=</span> <span class="k">this</span><span class="p">.</span><span class="nx">blogService</span><span class="p">.</span><span class="nx">getPost</span><span class="p">(</span><span class="nx">URL_SLUG</span><span class="p">);</span>
+</code></pre></div></div>
+<p>When we call <code class="highlighter-rouge">getPost()</code> on the server-side, we need to save its return value to our state:</p>
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">if</span> <span class="p">(</span><span class="nx">isPlatformServer</span><span class="p">(</span><span class="k">this</span><span class="p">.</span><span class="nx">platformId</span><span class="p">))</span> <span class="p">{</span>
+  <span class="k">this</span><span class="p">.</span><span class="nx">blogPost</span> <span class="o">=</span> <span class="nx">$dataSource</span><span class="p">.</span><span class="nx">pipe</span><span class="p">(</span><span class="nx">map</span><span class="p">(</span><span class="nx">datum</span> <span class="o">=&gt;</span> <span class="p">{</span>
+    <span class="k">this</span><span class="p">.</span><span class="nx">state</span><span class="p">.</span><span class="kd">set</span><span class="p">(</span><span class="nx">dataKey</span><span class="p">,</span> <span class="nx">datum</span><span class="p">);</span>
+    <span class="k">return</span> <span class="nx">datum</span><span class="p">;</span>
+  <span class="p">}),</span> <span class="nx">take</span><span class="p">(</span><span class="mi">1</span><span class="p">));</span>
+<span class="p">}</span>
+</code></pre></div></div>
+<h3 id="2-reading-from-state-in-the-browser">2. Reading from state in the browser</h3>
+<p>When running in the browser, we need to check if <code class="highlighter-rouge">getPost()</code> was already called on the server and if so, we shouldn’t make the call again:</p>
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">if</span> <span class="p">(</span><span class="nx">isPlatformServer</span><span class="p">(</span><span class="k">this</span><span class="p">.</span><span class="nx">platformId</span><span class="p">))</span> <span class="p">{</span>
+  <span class="p">...</span>
+<span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="nx">isPlatformBrowser</span><span class="p">(</span><span class="k">this</span><span class="p">.</span><span class="nx">platformId</span><span class="p">))</span> <span class="p">{</span>
+  <span class="kd">const</span> <span class="nx">savedValue</span> <span class="o">=</span> <span class="k">this</span><span class="p">.</span><span class="nx">state</span><span class="p">.</span><span class="kd">get</span><span class="p">(</span><span class="nx">dataKey</span><span class="p">,</span> <span class="kc">null</span><span class="p">);</span>
+  <span class="k">if</span> <span class="p">(</span><span class="nx">savedValue</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">this</span><span class="p">.</span><span class="nx">blogPost</span> <span class="o">=</span> <span class="nx">$dataSource</span><span class="p">.</span><span class="nx">pipe</span><span class="p">(</span><span class="nx">startWith</span><span class="p">(</span><span class="nx">savedValue</span><span class="p">),</span> <span class="nx">take</span><span class="p">(</span><span class="mi">1</span><span class="p">));</span>
+  <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+    <span class="k">this</span><span class="p">.</span><span class="nx">blogPost</span> <span class="o">=</span> <span class="nx">$dataSource</span><span class="p">;</span>
+  <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+<p>The issue is now fixed and only one API request will be made on each page refresh. The annoying content flash is also gone!</p>
+<h3 id="3-refactoring-and-reusing-the-code">3. Refactoring and reusing the code</h3>
+<p>You might say, “that was a ton of code for a single API call!” and I agree with you. The great news is that all of that code can be abstracted away and reused for all Observables. I’m moving the code to <code class="highlighter-rouge">BlogService</code> (but it’s best to move it to a general utils service), where I’ll define a <code class="highlighter-rouge">getCachedObservable</code> function that accepts an Observable and a state key:</p>
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nx">getCachedObservable</span><span class="p">(</span><span class="nx">$dataSource</span><span class="p">:</span> <span class="nx">Observable</span><span class="o">&lt;</span><span class="nx">any</span><span class="o">&gt;</span><span class="p">,</span> <span class="nx">dataKey</span><span class="p">:</span> <span class="nx">StateKey</span><span class="o">&lt;</span><span class="nx">any</span><span class="o">&gt;</span><span class="p">)</span> <span class="p">{</span>
+  <span class="k">if</span> <span class="p">(</span><span class="nx">isPlatformServer</span><span class="p">(</span><span class="k">this</span><span class="p">.</span><span class="nx">platformId</span><span class="p">))</span> <span class="p">{</span>
+    <span class="k">return</span> <span class="nx">$dataSource</span><span class="p">.</span><span class="nx">pipe</span><span class="p">(</span><span class="nx">map</span><span class="p">(</span><span class="nx">datum</span> <span class="o">=&gt;</span> <span class="p">{</span>
+      <span class="k">this</span><span class="p">.</span><span class="nx">state</span><span class="p">.</span><span class="kd">set</span><span class="p">(</span><span class="nx">dataKey</span><span class="p">,</span> <span class="nx">datum</span><span class="p">);</span>
+      <span class="k">return</span> <span class="nx">datum</span><span class="p">;</span>
+    <span class="p">}),</span> <span class="nx">take</span><span class="p">(</span><span class="mi">1</span><span class="p">));</span>
+  <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="nx">isPlatformBrowser</span><span class="p">(</span><span class="k">this</span><span class="p">.</span><span class="nx">platformId</span><span class="p">))</span> <span class="p">{</span>
+    <span class="kd">const</span> <span class="nx">savedValue</span> <span class="o">=</span> <span class="k">this</span><span class="p">.</span><span class="nx">state</span><span class="p">.</span><span class="kd">get</span><span class="p">(</span><span class="nx">dataKey</span><span class="p">,</span> <span class="kc">null</span><span class="p">);</span>
+    <span class="kd">const</span> <span class="nx">observableToReturn</span> <span class="o">=</span> <span class="nx">savedValue</span> <span class="p">?</span> <span class="nx">$dataSource</span><span class="p">.</span><span class="nx">pipe</span><span class="p">(</span><span class="nx">startWith</span><span class="p">(</span><span class="nx">savedValue</span><span class="p">),</span> <span class="nx">take</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span> <span class="p">:</span> <span class="nx">$dataSource</span><span class="p">;</span>
+    <span class="k">return</span> <span class="nx">observableToReturn</span><span class="p">;</span>
+  <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+<p>In our components we can simply use that function for any Observable calls:</p>
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">this</span><span class="p">.</span><span class="nx">blogPost</span> <span class="o">=</span> <span class="k">this</span><span class="p">.</span><span class="nx">blogService</span><span class="p">.</span><span class="nx">getCachedObservable</span><span class="p">(</span><span class="nx">$dataSource</span><span class="p">,</span> <span class="nx">dataKey</span><span class="p">);</span>
+</code></pre></div></div>
+<h3 id="4-optional-tweaking-for-other-use-cases-ie-observable-with-2-values">4. (optional) Tweaking for other use-cases (i.e. Observable with 2+ values)</h3>
+<p>In the previous code, we made an assumption that we only care about the first value of our Observable. While it is perfectly fine for our blog with virtually static content, the assumption may not be valid depending on your use-case.<br />
+To see an example, let’s suppose our blog article updates every couple of seconds and <code class="highlighter-rouge">getPost()</code> supplies every update. With the current implementation, we’d only ever see the first value the Observable sent us (because of the <code class="highlighter-rouge">take(1)</code> operator).<br />
+So let’s remove <code class="highlighter-rouge">take(1)</code> from the logic on the browser side:</p>
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nx">getCachedObservable</span><span class="p">(</span><span class="nx">$dataSource</span><span class="p">:</span> <span class="nx">Observable</span><span class="o">&lt;</span><span class="nx">any</span><span class="o">&gt;</span><span class="p">,</span> <span class="nx">dataKey</span><span class="p">:</span> <span class="nx">StateKey</span><span class="o">&lt;</span><span class="nx">any</span><span class="o">&gt;</span><span class="p">)</span> <span class="p">{</span>
+  <span class="k">if</span> <span class="p">(</span><span class="nx">isPlatformServer</span><span class="p">(</span><span class="k">this</span><span class="p">.</span><span class="nx">platformId</span><span class="p">))</span> <span class="p">{</span>
+    <span class="p">...</span>
+  <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="nx">isPlatformBrowser</span><span class="p">(</span><span class="k">this</span><span class="p">.</span><span class="nx">platformId</span><span class="p">))</span> <span class="p">{</span>
+    <span class="kd">const</span> <span class="nx">savedValue</span> <span class="o">=</span> <span class="k">this</span><span class="p">.</span><span class="nx">state</span><span class="p">.</span><span class="kd">get</span><span class="p">(</span><span class="nx">dataKey</span><span class="p">,</span> <span class="kc">null</span><span class="p">);</span>
+    <span class="kd">const</span> <span class="nx">observableToReturn</span> <span class="o">=</span> <span class="nx">savedValue</span> <span class="p">?</span> <span class="nx">$dataSource</span><span class="p">.</span><span class="nx">pipe</span><span class="p">(</span><span class="nx">startWith</span><span class="p">(</span><span class="nx">savedValue</span><span class="p">))</span> <span class="p">:</span> <span class="nx">$dataSource</span><span class="p">;</span>
+    <span class="k">return</span> <span class="nx">observableToReturn</span><span class="p">;</span>
+  <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+<p>Now, if we open the page we’ll see the updates:</p>
+<div style="text-align: center">
+  <video autoplay="" loop="" width="500">
+      <source src="https://firebasestorage.googleapis.com/v0/b/my-blog-5360d.appspot.com/o/uploads%2Fdisplaying-updatesmp4-0508?alt=media&amp;token=a129191b-3caa-4f4d-a36c-1ad0e01c5520" type="video/mp4" />
+      Sorry, your browser doesn't support embedded videos.
+  </video>
+</div>
+
+<h2 id="bonus---how-is-state-transferred-from-server-to-client">Bonus - How is state transferred from server to client?</h2>
+<p>If we look at the page source in the browser, we can see that Angular transfers the state as a JSON string, which it places in a script tag at the bottom of the page and reads on the client-side:<br />
+<img src="https://firebasestorage.googleapis.com/v0/b/my-blog-5360d.appspot.com/o/uploads%2Fpage-source-bottompng-9676?alt=media&amp;token=35bae197-9289-4861-89f4-99c9a3d7d586" alt="page-source-bottom" /></p>
+
+<h2 id="conclusion">Conclusion</h2>
+<p>The caching mechanism that I described above can significantly speed up your applications and reduce strain on your servers/computational power. Notice, that while I optimized API service calls, you can optimize any Observables in the same fashion (e.g. you have a library that performs heavy computations and returns an Observable). Lastly, Observables are just a common use-case and you can implement the same mechanism for Promises, synchronous functions, etc.</p>
+
+<p>That’s all I have for you today. The full source code of the mini-blog used in the article can be found <a href="https://github.com/aziz512/angular-ssr-caching-example">here on GitHub</a>.<br />
+You are welcome to let me know in the comments if I forgot to cover something or if you have any questions!</p>
+
+</div>
+
+<div class="pagination">
+  
+  
+    <a href="/post/setting-status-code-and-handling-404-pages-in-angular-universal-0232" class="right arrow">&#8594;</a>
+  
+
+  <a href="#" class="top">Top</a>
+</div>
+    </main>
+
+    <footer>
+  <span>
+    &copy; <time datetime="2020-05-20 00:16:19 -0400">2020</time> Aziz Yokubjonov.
+  </span>
+</footer>
+
+  </body>
+</html>

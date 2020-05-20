@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>Setting Status Code and Handling 404 Pages in Angular Universal | Aziz Writes</title>
+<meta name="generator" content="Jekyll v4.0.1" />
+<meta property="og:title" content="Setting Status Code and Handling 404 Pages in Angular Universal" />
+<meta name="author" content="Aziz Yokubjonov" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="If you use Angular Universal, you probably know that in addition to Server Side Rendering, Universal provides you with the full range of Node.js functionality on the server-side. Today we will examine how to use Express.js’s popular Request and Response API within our Angular applications. To illustrate the setup process, I’ll show how I created the simple 404 Not Found page on this blog." />
+<meta property="og:description" content="If you use Angular Universal, you probably know that in addition to Server Side Rendering, Universal provides you with the full range of Node.js functionality on the server-side. Today we will examine how to use Express.js’s popular Request and Response API within our Angular applications. To illustrate the setup process, I’ll show how I created the simple 404 Not Found page on this blog." />
+<meta property="og:site_name" content="Aziz Writes" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2019-12-23T00:00:00-05:00" />
+<script type="application/ld+json">
+{"author":{"@type":"Person","name":"Aziz Yokubjonov"},"headline":"Setting Status Code and Handling 404 Pages in Angular Universal","dateModified":"2019-12-23T00:00:00-05:00","description":"If you use Angular Universal, you probably know that in addition to Server Side Rendering, Universal provides you with the full range of Node.js functionality on the server-side. Today we will examine how to use Express.js’s popular Request and Response API within our Angular applications. To illustrate the setup process, I’ll show how I created the simple 404 Not Found page on this blog.","datePublished":"2019-12-23T00:00:00-05:00","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"/post/setting-status-code-and-handling-404-pages-in-angular-universal-0232"},"url":"/post/setting-status-code-and-handling-404-pages-in-angular-universal-0232","@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="/assets/main.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Libre+Baskerville:400,400i,700">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+
+  <!-- RSS -->
+  <link type="application/atom+xml" rel="alternate" href="/feed.xml" title="Aziz Writes" />
+
+  <!-- Google Analytics-->
+  
+</head>
+
+
+  <body>
+
+    <nav class="nav">
+  <div class="nav-container">
+    <a href="/">
+      <h2 class="nav-title">Aziz Writes</h2> stuff here
+    </a>
+    <ul>
+      <li><a href="/about">About</a></li>
+      <li><a href="/contact">Contact</a></li>
+      <li><a href="/feed.xml">Feed</a></li>
+    </ul>
+  </div>
+</nav>
+
+
+    <main>
+      <div class="post">
+  <div class="post-info">
+    
+      <time datetime="2019-12-23 00:00:00 -0500">December 23, 2019</time>
+    
+  </div>
+
+  <h1 class="post-title">Setting Status Code and Handling 404 Pages in Angular Universal</h1>
+  <div class="post-line"></div>
+
+  <p>If you use Angular Universal, you probably know that in addition to Server Side Rendering, Universal provides you with the full range of Node.js functionality on the server-side.<br />
+Today we will examine how to use Express.js’s popular <code class="highlighter-rouge">Request</code> and <code class="highlighter-rouge">Response</code> API within our Angular applications.<br />
+To illustrate the setup process, I’ll show how I created the simple 404 Not Found page on this blog.</p>
+
+<h3 id="laying-the-foundation">Laying the foundation</h3>
+<p>Let’s first create a <code class="highlighter-rouge">NotFoundComponent</code>, to which we will redirect our users:</p>
+<div class="language-typescript highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">@</span><span class="nd">Component</span><span class="p">({</span>
+ <span class="na">selector</span><span class="p">:</span> <span class="dl">'</span><span class="s1">blog-not-found</span><span class="dl">'</span><span class="p">,</span>
+ <span class="na">template</span><span class="p">:</span> <span class="s2">`&lt;h2&gt;Seems like this page doesn't exist :(&lt;/h2&gt;`</span>
+<span class="p">})</span>
+<span class="k">export</span> <span class="kd">class</span> <span class="nx">NotFoundComponent</span> <span class="p">{}</span>
+</code></pre></div></div>
+<p>And set up proper routes and redirects for our newly-created <code class="highlighter-rouge">NotFoundComponent</code>:</p>
+<div class="language-typescript highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">...</span> <span class="c1">// other routes</span>
+<span class="p">{</span>
+   <span class="nl">path</span><span class="p">:</span> <span class="dl">'</span><span class="s1">404</span><span class="dl">'</span><span class="p">,</span>
+   <span class="nx">component</span><span class="p">:</span> <span class="nx">NotFoundComponent</span>
+ <span class="p">},</span>
+<span class="p">...</span>
+</code></pre></div></div>
+<p>Now if we go to our 404 page, we’ll see the following:</p>
+
+<p><img src="https://firebasestorage.googleapis.com/v0/b/my-blog-5360d.appspot.com/o/uploads%2Fscreen-shot-2019-12-23-at-121909-ampng-0421?alt=media&amp;token=b0d3b501-630c-4218-831e-9a5065c877c8" alt="The screenshot of NotFound" /></p>
+
+<p>All good, right? Not quite. You see, our Not Found page clearly works for the users (except the godly design, perhaps) but robots (such as search engines) still perceive it to be a valid page of our website that needs to be indexed.<br />
+We can verify this if we look at the Network tab in the DevTools, where we see that the status code for our page is 200 (success) instead of expected 404 (not found):</p>
+
+<p><img src="https://firebasestorage.googleapis.com/v0/b/my-blog-5360d.appspot.com/o/uploads%2Fscreen-shot-2019-12-23-at-122419-ampng-0427?alt=media&amp;token=a52a62bc-8fe8-412a-a30e-c3b1546f5b00" alt="Screenshot of wacky response code in devtools" /></p>
+
+<h3 id="using-expressjs-request-and-response-objects-within-our-application">Using Express.js Request and Response Objects within our application</h3>
+<p>To set the status code, we will use the <code class="highlighter-rouge">Response</code> object.
+In case you’re not familiar with them, <a href="https://expressjs.com/en/api.html#req"><code class="highlighter-rouge">Request</code></a> (aka <code class="highlighter-rouge">req</code>) and <a href="https://expressjs.com/en/api.html#res"><code class="highlighter-rouge">Response</code></a> (aka <code class="highlighter-rouge">res</code>) are the primary way of processing HTTP requests in Express.</p>
+
+<h3 id="providing-the-response-object-to-our-angular-app">Providing the Response object to our Angular app</h3>
+<p>Looking at the <a href="https://github.com/angular/universal/blob/a922918bcd26339173eea76f3fd2fbac41a39064/modules/express-engine/src/main.ts#L83">source code of Universal</a>, we see that unlike <code class="highlighter-rouge">REQUEST</code>, <code class="highlighter-rouge">RESPONSE</code> provider is optional and only provided if there is a <code class="highlighter-rouge">res</code> object in the <code class="highlighter-rouge">RenderOptions</code>:</p>
+
+<div class="language-typescript highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">if</span> <span class="p">(</span><span class="nx">res</span><span class="p">)</span> <span class="p">{</span>
+    <span class="nx">providers</span><span class="p">.</span><span class="nx">push</span><span class="p">({</span>
+        <span class="na">provide</span><span class="p">:</span> <span class="nx">RESPONSE</span><span class="p">,</span>
+        <span class="na">useValue</span><span class="p">:</span> <span class="nx">res</span>
+    <span class="p">});</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>Therefore, in our <code class="highlighter-rouge">server.ts</code> file we need to add <code class="highlighter-rouge">res</code> to the <code class="highlighter-rouge">RenderOptions</code> object when rendering our pages:</p>
+
+<div class="language-typescript highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nx">app</span><span class="p">.</span><span class="kd">get</span><span class="p">(</span><span class="dl">'</span><span class="s1">*</span><span class="dl">'</span><span class="p">,</span> <span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">{</span>
+ <span class="nx">res</span><span class="p">.</span><span class="nx">render</span><span class="p">(</span><span class="dl">'</span><span class="s1">index</span><span class="dl">'</span><span class="p">,</span> <span class="p">{</span> <span class="nx">req</span><span class="p">,</span> <span class="nx">res</span> <span class="p">});</span>
+<span class="p">});</span>
+</code></pre></div></div>
+<p>Now we can successfully inject the <code class="highlighter-rouge">req</code> and <code class="highlighter-rouge">res</code> objects into our <code class="highlighter-rouge">NotFoundComponent</code>:</p>
+<div class="language-typescript highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">import</span> <span class="p">{</span> <span class="nx">Optional</span><span class="p">,</span> <span class="nx">Inject</span> <span class="p">}</span> <span class="k">from</span> <span class="dl">'</span><span class="s1">@angular/core</span><span class="dl">'</span><span class="p">;</span>
+<span class="k">import</span> <span class="p">{</span> <span class="nx">RESPONSE</span><span class="p">,</span> <span class="nx">REQUEST</span> <span class="p">}</span> <span class="k">from</span> <span class="dl">'</span><span class="s1">@nguniversal/express-engine/tokens</span><span class="dl">'</span><span class="p">;</span>
+<span class="k">import</span> <span class="p">{</span> <span class="nx">Request</span><span class="p">,</span> <span class="nx">Response</span> <span class="p">}</span> <span class="k">from</span> <span class="dl">'</span><span class="s1">express</span><span class="dl">'</span><span class="p">;</span>
+<span class="cm">/*
+ ...
+ ...
+*/</span>
+<span class="kd">constructor</span><span class="p">(@</span><span class="nd">Optional</span><span class="p">()</span> <span class="p">@</span><span class="nd">Inject</span><span class="p">(</span><span class="nx">REQUEST</span><span class="p">)</span> <span class="kr">private</span> <span class="nx">request</span><span class="p">:</span> <span class="nx">Request</span><span class="p">,</span>
+            <span class="p">@</span><span class="nd">Optional</span><span class="p">()</span> <span class="p">@</span><span class="nd">Inject</span><span class="p">(</span><span class="nx">RESPONSE</span><span class="p">)</span> <span class="kr">private</span> <span class="nx">response</span><span class="p">:</span> <span class="nx">Response</span><span class="p">){</span>
+</code></pre></div></div>
+
+<p>Notice that I added the <code class="highlighter-rouge">@Optional()</code> decorator. This is because <code class="highlighter-rouge">Request</code> and <code class="highlighter-rouge">Response</code> objects are purely Express concepts and thus can’t exist in the Browser context. With <code class="highlighter-rouge">@Optional()</code>, these objects will be equal to null in a Browser environment.</p>
+
+<h3 id="setting-response-status-code">Setting response status code</h3>
+<p>Now that we injected the Response object into our <code class="highlighter-rouge">NotFoundComponent</code>, we can use it as follows:</p>
+<div class="language-typescript highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">if</span> <span class="p">(</span><span class="nx">isPlatformServer</span><span class="p">(</span><span class="k">this</span><span class="p">.</span><span class="nx">platformId</span><span class="p">))</span> <span class="p">{</span>
+  <span class="k">this</span><span class="p">.</span><span class="nx">response</span><span class="p">.</span><span class="nx">status</span><span class="p">(</span><span class="mi">404</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>As I mentioned earlier, <code class="highlighter-rouge">Request</code> and <code class="highlighter-rouge">Response</code> objects are only available in the Node context, hence before using them we need to ensure we’re executing on the server side by checking <code class="highlighter-rouge">isPlatformServer(...)</code>.</p>
+
+<p>Full code of the <code class="highlighter-rouge">NotFoundComponent</code>:</p>
+<div class="language-typescript highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">import</span> <span class="p">{</span> <span class="nx">Component</span><span class="p">,</span> <span class="nx">OnInit</span><span class="p">,</span> <span class="nx">Optional</span><span class="p">,</span> <span class="nx">Inject</span><span class="p">,</span> <span class="nx">PLATFORM_ID</span> <span class="p">}</span> <span class="k">from</span> <span class="dl">'</span><span class="s1">@angular/core</span><span class="dl">'</span><span class="p">;</span>
+<span class="k">import</span> <span class="p">{</span> <span class="nx">RESPONSE</span><span class="p">,</span> <span class="nx">REQUEST</span> <span class="p">}</span> <span class="k">from</span> <span class="dl">'</span><span class="s1">@nguniversal/express-engine/tokens</span><span class="dl">'</span><span class="p">;</span>
+<span class="k">import</span> <span class="p">{</span> <span class="nx">isPlatformServer</span> <span class="p">}</span> <span class="k">from</span> <span class="dl">'</span><span class="s1">@angular/common</span><span class="dl">'</span><span class="p">;</span>
+<span class="k">import</span> <span class="p">{</span> <span class="nx">Request</span><span class="p">,</span> <span class="nx">Response</span> <span class="p">}</span> <span class="k">from</span> <span class="dl">'</span><span class="s1">express</span><span class="dl">'</span><span class="p">;</span>
+ 
+<span class="p">@</span><span class="nd">Component</span><span class="p">({</span>
+ <span class="na">selector</span><span class="p">:</span> <span class="dl">'</span><span class="s1">blog-not-found</span><span class="dl">'</span><span class="p">,</span>
+ <span class="na">template</span><span class="p">:</span> <span class="s2">`&lt;h2&gt;Seems like this page doesn't exist :(&lt;/h2&gt;`</span>
+<span class="p">})</span>
+<span class="k">export</span> <span class="kd">class</span> <span class="nx">NotFoundComponent</span> <span class="kr">implements</span> <span class="nx">OnInit</span> <span class="p">{</span>
+ <span class="kd">constructor</span><span class="p">(@</span><span class="nd">Optional</span><span class="p">()</span> <span class="p">@</span><span class="nd">Inject</span><span class="p">(</span><span class="nx">REQUEST</span><span class="p">)</span> <span class="kr">private</span> <span class="nx">request</span><span class="p">:</span> <span class="nx">Request</span><span class="p">,</span>
+             <span class="p">@</span><span class="nd">Optional</span><span class="p">()</span> <span class="p">@</span><span class="nd">Inject</span><span class="p">(</span><span class="nx">RESPONSE</span><span class="p">)</span> <span class="kr">private</span> <span class="nx">response</span><span class="p">:</span> <span class="nx">Response</span><span class="p">,</span>
+             <span class="p">@</span><span class="nd">Inject</span><span class="p">(</span><span class="nx">PLATFORM_ID</span><span class="p">)</span> <span class="kr">private</span> <span class="nx">platformId</span><span class="p">:</span> <span class="nx">any</span><span class="p">)</span> <span class="p">{</span> <span class="p">}</span>
+ 
+ <span class="nx">ngOnInit</span><span class="p">()</span> <span class="p">{</span>
+   <span class="k">if</span> <span class="p">(</span><span class="nx">isPlatformServer</span><span class="p">(</span><span class="k">this</span><span class="p">.</span><span class="nx">platformId</span><span class="p">))</span> <span class="p">{</span>
+     <span class="k">this</span><span class="p">.</span><span class="nx">response</span><span class="p">.</span><span class="nx">status</span><span class="p">(</span><span class="mi">404</span><span class="p">);</span>
+   <span class="p">}</span>
+ <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>Now let’s run our app once again and go to 404 with DevTools open:</p>
+
+<p><img src="https://firebasestorage.googleapis.com/v0/b/my-blog-5360d.appspot.com/o/uploads%2Fscreen-shot-2019-12-23-at-125250-ampng-0428?alt=media&amp;token=4fd87b62-26c9-4449-a1a7-cc079b4629cb" alt="404 status code screenshot" /></p>
+
+<p>As you can see, it now works just as we wanted it. Both users and robots must be tremendously happy!</p>
+
+<p><img src="https://media.giphy.com/media/l3V0lsGtTMSB5YNgc/source.gif" alt="Dancing panda gif" /></p>
+
+<p><strong>Note:</strong> I didn’t show how to use the <code class="highlighter-rouge">Request</code> object here. However, once injected in the constructor (shown above), it can be used in a fashion similar to <code class="highlighter-rouge">Response</code>.</p>
+
+</div>
+
+<div class="pagination">
+  
+    <a href="/post/optimizing-observables-in-angular-universal-fixing-content-flickering-by-caching-with-browsertransferstatemodule-5796" class="left arrow">&#8592;</a>
+  
+  
+
+  <a href="#" class="top">Top</a>
+</div>
+    </main>
+
+    <footer>
+  <span>
+    &copy; <time datetime="2020-05-20 00:16:19 -0400">2020</time> Aziz Yokubjonov.
+  </span>
+</footer>
+
+  </body>
+</html>
